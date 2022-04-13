@@ -1,0 +1,19 @@
+{
+  "name": "wax-exchanges",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",    
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "eosjs": "^21.0.2",
+    "moment": "^2.29.2",
+    "node-fetch": "^2.6.0",
+    "text-encoding": "^0.7.0"
+  }
+}
