@@ -6,14 +6,14 @@ const fetch = require("node-fetch");
 const moment = require('moment');
 
 var rpc, signatureProvider, api;
-try {
-    rpc = new JsonRpc(config.endpoint, {fetch});
-    signatureProvider = new JsSignatureProvider([config.private_key]);
-    api = new Api({rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder()});
-} catch (err) {
-    console.log(`Api provider initialize error:`, err)
-    process.exit();
-}
+//try {
+//    rpc = new JsonRpc(config.endpoint, {fetch});
+//    signatureProvider = new JsSignatureProvider([config.private_key]);
+//    api = new Api({rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder()});
+//} catch (err) {
+//    console.log(`Api provider initialize error:`, err)
+//    process.exit();
+//}
 
 const exchanges = ['binance', 'huobi', 'bitfinex', 'bittrex'];
 
@@ -156,7 +156,8 @@ const send_quotes = async () => {
         }
 
         try {
-            const res = await transact(quotes);
+            //const res = await transact(quotes);
+            const res = await transactRetry([...config.endpoints], quotes);
 
             console.log(`Pushed transaction ${res.transaction_id}`);
         } catch (e) {
@@ -168,6 +169,50 @@ const send_quotes = async () => {
     }
     console.log(`==============Stop: ${moment().utc().format()}====================`)
 };
+
+function transactRetry(endpoints, quotes) {
+    let endpoint = endpoints.shift();
+    console.log(`Endpoint: ${endpoint}`)
+
+    try {
+        rpc = new JsonRpc(endpoint, {fetch});
+        signatureProvider = new JsSignatureProvider([config.private_key]);
+        api = new Api({rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder()});
+    } catch (error) {
+    }
+
+    console.log(`Quotes`, quotes);
+
+    const actions = [{
+            account: 'delphioracle',
+            name: 'write',
+            authorization: [{
+                    actor: config.account,
+                    permission: config.permission
+                }],
+            data: {
+                owner: config.account,
+                quotes: quotes
+            }
+        }];
+
+    return api.transact({
+        actions
+    }, {
+        blocksBehind: 3,
+        expireSeconds: 30,
+    }).then(res => {
+        return res
+    }).catch(error => {
+        console.error(`Failed - ${error.message}`);
+
+        if (endpoints.length > 0) {
+            return transactRetry(endpoints, quotes)
+        } else {
+            throw new Error('All endpoints failed')
+        }
+    })
+}
 
 const transact = async (quotes) => {
 
