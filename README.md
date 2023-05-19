@@ -1,5 +1,10 @@
 # WAX Delphi Oracle Script with multiple exchange support
 
+## Features
+- Suppots multiple exchanges that have WAX listing
+- Fallback to next exchange configured (if unavailable)
+- Fallback to next API endpoint if API is unavailable (increases reliability of the oracle service) 
+
 ## Supported exchanges & pairs
 
 - Binance: 
