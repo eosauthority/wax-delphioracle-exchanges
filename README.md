@@ -1,9 +1,9 @@
 # WAX Delphi Oracle Script with multiple exchange support
 
 ## Features
-- Suppots multiple exchanges that have WAX listing
-- Fallback to next exchange configured (if unavailable)
-- Fallback to next API endpoint if API is unavailable (increases reliability of the oracle service) 
+- Supports a variety of exchanges where WAX is listed
+- Automatically switches to the next configured exchange in case of unavailability
+- In case of API unavailability, it falls back to the next API endpoint to enhance the reliability of the oracle service
 
 ## Supported exchanges & pairs
 
