@@ -19,9 +19,13 @@
 
 - Huobi:
 
-    [WAXP/BTC](https://api.huobi.pro/market/trade?symbol=waxpbtc)
-    [WAXP/ETH](https://api.huobi.pro/market/trade?symbol=waxpeth)
     [WAXP/USD](https://api.huobi.pro/market/trade?symbol=waxpusdt)
+
+- Kucoin:
+
+    [WAXP/BTC](https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=WAX-BTC)
+    [WAXP/ETH](https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=WAX-ETH)
+    [WAXP/USD](https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=WAX-USDT)
 
 ## Configure
 
