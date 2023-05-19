@@ -16,7 +16,7 @@ var rpc, signatureProvider, api;
 //    process.exit();
 //}
 
-const exchanges = ['binance', 'huobi', 'bitfinex', 'bittrex'];
+const exchanges = ['binance', 'huobi', 'bitfinex', 'bittrex', 'kucoin'];
 
 const pairs = [
     {name: 'waxpbtc', precision: 8},
@@ -173,6 +173,39 @@ const send_quotes = async () => {
 
                         }
                         break;
+                    case 'kucoin':
+                        for (const pair of pairs) {
+                            var ticker;
+                            switch (pair.name) {
+                                case 'waxpbtc':
+                                    ticker = 'WAX-BTC';
+                                    break;                                
+                                case 'waxpeth':
+                                    ticker = 'WAX-ETH';
+                                    break;
+                                case 'waxpusd':
+                                    ticker = 'WAX-USDT';
+                                    break;
+                                default :
+                                    ticker = null;
+                                    break;
+                            }
+                            if (!ticker)
+                                continue;
+
+                            var url = `https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=${ticker}`;
+                            const res = await fetch(url, {timeout: 5 * 1000});
+                            if (!res.ok)
+                                continue;
+
+                            const data = await res.json();
+
+                            if (!data || !data.data || parseFloat(data.data.price) == 0)
+                                continue;
+
+                            quotes.push({pair: pair.name, value: Math.round(parseFloat(data.data.price) * Math.pow(10, pair.precision))});
+                        }
+                        break;
                 }
             } catch (e) {
                 console.error(`Failed Exchange ${exchange} - ${e.message}`);
@@ -284,5 +317,4 @@ const start = async () => {
 };
 
 start();
-
 
