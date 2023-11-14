@@ -2,7 +2,7 @@
 
 ## Features
 - Supports a variety of exchanges where WAX is listed
-- Automatically switches to the next configured exchange in case of unavailability
+- Automatically switches to the next configured exchange in case of unavailability of the API or if the particular ticker is not available
 - In case of API unavailability, it falls back to the next API endpoint to enhance the reliability of the oracle service
 
 ## Supported exchanges & pairs
