@@ -1,313 +1,248 @@
 const config = require('./config');
-const {Api, JsonRpc, Serialize} = require('eosjs');
-const {TextDecoder, TextEncoder} = require('text-encoding');
-const {JsSignatureProvider} = require('eosjs/dist/eosjs-jssig');
-const fetch = require("node-fetch");
+const { Api, JsonRpc } = require('eosjs');
+const { TextDecoder, TextEncoder } = require('text-encoding');
+const { JsSignatureProvider } = require('eosjs/dist/eosjs-jssig');
+const fetch = require('node-fetch');
 const moment = require('moment');
 
-
-var rpc, signatureProvider, api;
-//try {
-//    rpc = new JsonRpc(config.endpoint, {fetch});
-//    signatureProvider = new JsSignatureProvider([config.private_key]);
-//    api = new Api({rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder()});
-//} catch (err) {
-//    console.log(`Api provider initialize error:`, err)
-//    process.exit();
-//}
-
-const exchanges = ['binance', 'huobi', 'bitfinex', 'bittrex', 'kucoin'];
+//this is the order to fallback if ticker is not available 
+const exchanges = ['kucoin', 'bitfinex', 'binance', 'huobi'];
 
 const pairs = [
-    {name: 'waxpbtc', precision: 8},
-    {name: 'waxpeth', precision: 8},
-    {name: 'waxpusd', precision: 4}
+    { name: 'waxpbtc', precision: 8 },
+    { name: 'waxpeth', precision: 8 },
+    { name: 'waxpusd', precision: 4 },
+    { name: 'usdcusd', precision: 4 },
+    { name: 'usdtusd', precision: 4 },        
 ];
 
 const send_quotes = async () => {
-    console.log(`==============Start: ${moment().utc().format()}====================`)
-//    console.log(`Exchange ${config.exchange}`)
-//    if (!exchanges.includes(config.exchange)) {
-//        console.log(`Exchange ${config.exchange} not in list`)
-//        process.exit()
-//    }
+    console.log(`==============Start: ${moment().utc().format()}====================`);
 
     try {
-        let fallbackExchanges = config.exchange.split(',');
-        let exchange = fallbackExchanges.shift();
-
         const quotes = [];
-        do {
-            console.log(`Exchange ${exchange}`);
-            if (!exchanges.includes(exchange)) {
-                console.log(`Exchange ${exchange} not in list`)
-                process.exit()
-            }
+        for (const pair of pairs) {
+            console.log(`Pair ${pair.name}`);
 
-            try {
-                switch (exchange) {
-                    case 'binance':
-                        for (const pair of pairs) {
-                            var ticker;
-                            switch (pair.name) {
-                                case 'waxpbtc':
-                                    ticker = 'WAXPBTC';
-                                    break;
-                                case 'waxpusd':
-                                    ticker = 'WAXPUSDT';
-                                    break;
-                                default :
-                                    ticker = null;
-                                    break;
-                            }
-                            if (!ticker)
-                                continue;
+            let validQuoteFound = false; // Track if a valid quote is found for the pair
 
-                            var url = `https://api.binance.com/api/v3/ticker/price?symbol=${ticker}`;
-                            const res = await fetch(url, {timeout: 5 * 1000});
-                            if (!res.ok)
-                                continue;
+            for (const exchange of exchanges) {
+                console.log(`Trying Exchange ${exchange}`);
 
-                            const data = await res.json();
+                try {
+                    const ticker = getTicker(pair.name, exchange);
+                    if (!ticker) {
+                        console.error(`Could not use exchange ${exchange} as ticker ${pair.name} was not available`);
+                        continue; // Move on to the next exchange
+                    }
 
-                            if (!data || data.symbol != ticker || parseFloat(data.price) == 0)
-                                continue;
+                    const url = getExchangeUrl(exchange, ticker);
+                    const res = await fetch(url, { timeout: 5 * 1000 });
 
-                            quotes.push({pair: pair.name, value: Math.round(parseFloat(data.price) * Math.pow(10, pair.precision))});
-                        }
-                        break;
-                    case 'huobi':
-                        for (const pair of pairs) {
-                            var ticker;
-                            switch (pair.name) {
-                                case 'waxpbtc':
-                                    ticker = 'waxpbtc';
-                                    break;
-                                case 'waxpeth':
-                                    ticker = 'waxpeth';
-                                    break;
-                                case 'waxpusd':
-                                    ticker = 'waxpusdt';
-                                    break;
-                                default :
-                                    ticker = null;
-                                    break;
-                            }
-                            if (!ticker)
-                                continue;
+                    if (!res.ok) {
+                        console.error(`Failed Exchange ${exchange} and no data returned`);
+                        continue; // Move on to the next exchange
+                    }
 
-                            var url = `https://api.huobi.pro/market/trade?symbol=${ticker}`;
-                            const res = await fetch(url, {timeout: 5 * 1000});
-                            if (!res.ok)
-                                continue;
+                    const data = await res.json();
 
-                            const data = await res.json();
+                    if (!isValidData(data, pair.name, ticker, exchange)) {
+                        console.error(`Data from Exchange ${exchange} for ticker ${ticker} was not valid.`, JSON.stringify(data));
+                        continue; // Move on to the next exchange
+                    } else {
+                        console.log(`Fetched data from Exchange ${exchange} for ticker ${ticker}.`, JSON.stringify(data));
+                        validQuoteFound = true;
+                    }
 
-                            if (!data || !data.tick || !data.tick.data[0] || parseFloat(data.tick.data[0].price) == 0)
-                                continue;
+                    quotes.push({
+                        pair: pair.name,
+                        value: Math.round(parseFloat(getPrice(data, pair.name, exchange)) * Math.pow(10, pair.precision)),
+                    });
 
-                            quotes.push({pair: pair.name, value: Math.round(parseFloat(data.tick.data[0].price) * Math.pow(10, pair.precision))});
-                        }
-                        break;
-                    case 'bitfinex':
-                        for (const pair of pairs) {
-                            var ticker;
-                            switch (pair.name) {
-                                case 'waxpusd':
-                                    ticker = 'WAXUSD';
-                                    break;
-                                default :
-                                    ticker = null;
-                                    break;
-                            }
-
-                            if (!ticker)
-                                continue;
-
-                            var url = `https://api.bitfinex.com/v1/pubticker/${ticker}`;
-                            const res = await fetch(url, {timeout: 5 * 1000});
-                            if (!res.ok)
-                                continue;
-
-                            const data = await res.json();
-
-                            if (!data || parseFloat(data.last_price) == 0)
-                                continue;
-
-                            quotes.push({pair: pair.name, value: Math.round(parseFloat(data.last_price) * Math.pow(10, pair.precision))});
-
-                        }
-                        break;
-                    case 'bittrex':
-                        for (const pair of pairs) {
-                            var ticker;
-                            switch (pair.name) {
-                                case 'waxpbtc':
-                                    ticker = 'WAXP-BTC';
-                                    break;
-                                case 'waxpeth':
-                                    ticker = 'WAXP-ETH';
-                                    break;
-                                case 'waxpusd':
-                                    ticker = 'WAXP-USD';
-                                    break;
-                                default :
-                                    ticker = null;
-                                    break;
-                            }
-
-                            if (!ticker)
-                                continue;
-
-                            var url = `https://api.bittrex.com/v3/markets/${ticker}/ticker`;
-                            const res = await fetch(url, {timeout: 5 * 1000});
-                            if (!res.ok)
-                                continue;
-
-                            const data = await res.json();
-
-                            if (!data || data.symbol != ticker)
-                                continue;
-
-                            quotes.push({pair: pair.name, value: Math.round(parseFloat(data.lastTradeRate) * Math.pow(10, pair.precision))});
-
-                        }
-                        break;
-                    case 'kucoin':
-                        for (const pair of pairs) {
-                            var ticker;
-                            switch (pair.name) {
-                                case 'waxpbtc':
-                                    ticker = 'WAX-BTC';
-                                    break;                                
-                                case 'waxpeth':
-                                    ticker = 'WAX-ETH';
-                                    break;
-                                case 'waxpusd':
-                                    ticker = 'WAX-USDT';
-                                    break;
-                                default :
-                                    ticker = null;
-                                    break;
-                            }
-                            if (!ticker)
-                                continue;
-
-                            var url = `https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=${ticker}`;
-                            const res = await fetch(url, {timeout: 5 * 1000});
-                            if (!res.ok)
-                                continue;
-
-                            const data = await res.json();
-
-                            if (!data || !data.data || parseFloat(data.data.price) == 0)
-                                continue;
-
-                            quotes.push({pair: pair.name, value: Math.round(parseFloat(data.data.price) * Math.pow(10, pair.precision))});
-                        }
-                        break;
+                    // If a quote is found, break out of the loop for this pair
+                    console.log(`Fetched Data from ${exchange} for ${ticker}`);
+                    break;
+                } catch (e) {
+                    console.error(`Failed Exchange ${exchange} - ${e.message}`);
                 }
-            } catch (e) {
-                console.error(`Failed Exchange ${exchange} - ${e.message}`);
             }
 
-            if (quotes.length === 0) {
-                exchange = fallbackExchanges.shift() || null;//Get next fallback exchange
-            } else {
-                exchange = null;//Got results set null skip while loop
+            if (!validQuoteFound) {
+                console.log(`No valid quotes found for ${pair.name}`);
             }
+        }
 
-        } while (exchange);
-
-
-        if (quotes.length === 0) {
-            throw new Error(`Quotes empty`);
+        if (!quotes.length) {
+            console.log(`No quotes found for any pair`);
+            return;
         }
 
         try {
-            //const res = await transact(quotes);
-            const res = await transactRetry([...config.endpoints], quotes);
-
-            console.log(`Pushed transaction ${res.transaction_id}`);
+            // const res = await transactRetry([...config.endpoints], quotes);
+            // console.log(`Pushed transaction ${res.transaction_id}`);
+            console.log([...config.endpoints], quotes);
         } catch (e) {
             console.error(`Failed to push quotes - ${e.message}`);
         }
-
     } catch (e) {
         console.error(`Failed - ${e.message}`);
     }
-    console.log(`==============Stop: ${moment().utc().format()}====================`)
+    console.log(`==============Stop: ${moment().utc().format()}====================`);
 };
 
-function transactRetry(endpoints, quotes) {
-    let endpoint = endpoints.shift();
-    console.log(`Endpoint: ${endpoint}`)
 
-    try {
-        rpc = new JsonRpc(endpoint, {fetch});
-        signatureProvider = new JsSignatureProvider([config.private_key]);
-        api = new Api({rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder()});
-    } catch (error) {
+function getTicker(pairName, exchange) {
+    switch (exchange) {
+        case 'binance':
+            return pairName === 'waxpbtc' ? 'WAXPBTC' : pairName === 'waxpusd' ? 'WAXPUSDT' : null;
+        case 'huobi':
+            return pairName === 'waxpusd' ? 'waxpusdt' : null;
+        case 'bitfinex':
+            return pairName === 'usdcusd' ? 'UDCUSD' : pairName === 'usdtusd' ? 'USTUSD' : null;
+        case 'kucoin':
+            return pairName === 'waxpbtc' ? 'WAX-BTC' : pairName === 'waxpeth' ? 'WAX-ETH' : pairName === 'waxpusd' ? 'WAX-USDT' : null;
+        default:
+            return null;
     }
-
-    console.log(`Quotes`, quotes);
-
-    const actions = [{
-            account: 'delphioracle',
-            name: 'write',
-            authorization: [{
-                    actor: config.account,
-                    permission: config.permission
-                }],
-            data: {
-                owner: config.account,
-                quotes: quotes
-            }
-        }];
-
-    return api.transact({
-        actions
-    }, {
-        blocksBehind: 3,
-        expireSeconds: 30,
-    }).then(res => {
-        return res
-    }).catch(error => {
-        console.error(`Failed - ${error.message}`);
-
-        if (endpoints.length > 0) {
-            return transactRetry(endpoints, quotes)
-        } else {
-            throw new Error('All endpoints failed')
-        }
-    })
 }
 
-const transact = async (quotes) => {
+function getExchangeUrl(exchange, ticker) {
+    switch (exchange) {
+        case 'binance':
+            return `https://api.binance.com/api/v3/ticker/price?symbol=${ticker}`;
+        case 'huobi':
+            return `https://api.huobi.pro/market/trade?symbol=${ticker}`;
+        case 'bitfinex':
+            return `https://api.bitfinex.com/v1/pubticker/${ticker}`;
+        case 'kucoin':
+            return `https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=${ticker}`;
+        default:
+            return null;
+    }
+}
+
+// Replace config.exchange with exchange in isValidData and getPrice functions
+
+function isValidData(data, pairName, ticker, exchange) {
+    switch (exchange) {
+        case 'binance':
+            return data && data.symbol === ticker && parseFloat(data.price) !== 0;
+        case 'huobi':
+            return data && data.tick && data.tick.data[0] && parseFloat(data.tick.data[0].price) !== 0;
+        case 'bitfinex':
+            return data && parseFloat(data.last_price) !== 0;
+        case 'kucoin':
+            return data && data.data && parseFloat(data.data.price) !== 0;
+        default:
+            return false;
+    }
+}
+
+function getPrice(data, pairName, exchange) {
+    switch (exchange) {
+        case 'binance':
+            return data.price;
+        case 'huobi':
+            return data.tick.data[0].price;
+        case 'bitfinex':
+            return data.last_price;
+        case 'kucoin':
+            return data.data.price;
+        default:
+            return null;
+    }
+}
+
+
+function getNextFallback(currentFallback) {
+    const fallbackExchanges = currentFallback.split(',');
+    return fallbackExchanges.shift() || null;
+}
+
+// Rest of the code remains unchanged
+
+const transactRetry = async (endpoints, quotes) => {
+    let endpoint = endpoints.shift();
+    console.log(`Endpoint: ${endpoint}`);
+
+    try {
+        rpc = new JsonRpc(endpoint, { fetch });
+        signatureProvider = new JsSignatureProvider([config.private_key]);
+        api = new Api({ rpc, signatureProvider, textDecoder: new TextDecoder(), textEncoder: new TextEncoder() });
+    } catch (error) {}
 
     console.log(`Quotes`, quotes);
 
-    const actions = [{
+    const actions = [
+        {
             account: 'delphioracle',
             name: 'write',
-            authorization: [{
+            authorization: [
+                {
                     actor: config.account,
-                    permission: config.permission
-                }],
+                    permission: config.permission,
+                },
+            ],
             data: {
                 owner: config.account,
-                quotes: quotes
+                quotes: quotes,
+            },
+        },
+    ];
+
+    return api
+        .transact(
+            {
+                actions,
+            },
+            {
+                blocksBehind: 3,
+                expireSeconds: 30,
             }
-        }];
+        )
+        .then((res) => {
+            return res;
+        })
+        .catch((error) => {
+            console.error(`Failed - ${error.message}`);
 
-    // console.log(actions);
+            if (endpoints.length > 0) {
+                return transactRetry(endpoints, quotes);
+            } else {
+                throw new Error('All endpoints failed');
+            }
+        });
+};
 
-    return api.transact({
-        actions
-    }, {
-        blocksBehind: 3,
-        expireSeconds: 30,
-    });
+const transact = async (quotes) => {
+    console.log(`Quotes`, quotes);
+
+    const actions = [
+        {
+            account: 'delphioracle',
+            name: 'write',
+            authorization: [
+                {
+                    actor: config.account,
+                    permission: config.permission,
+                },
+            ],
+            data: {
+                owner: config.account,
+                quotes: quotes,
+            },
+        },
+    ];
+
+    return api.transact(
+        {
+            actions,
+        },
+        {
+            blocksBehind: 3,
+            expireSeconds: 30,
+        }
+    );
 };
 
 const start = async () => {
@@ -317,4 +252,3 @@ const start = async () => {
 };
 
 start();
-
