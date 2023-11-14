@@ -78,8 +78,8 @@ const send_quotes = async () => {
         }
 
         try {
-            // const res = await transactRetry([...config.endpoints], quotes);
-            // console.log(`Pushed transaction ${res.transaction_id}`);
+            const res = await transactRetry([...config.endpoints], quotes);
+            console.log(`Pushed transaction ${res.transaction_id}`);
             console.log([...config.endpoints], quotes);
         } catch (e) {
             console.error(`Failed to push quotes - ${e.message}`);
