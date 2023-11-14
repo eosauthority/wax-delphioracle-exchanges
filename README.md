@@ -14,13 +14,8 @@
 
 - Bitfinex:
 
-    [WAX/USD](https://api.bitfinex.com/v1/pubticker/WAXUSD)
-
-- Bittrex:
-
-    [WAXP/BTC](https://api.bittrex.com/v3/markets/WAXP-BTC/ticker)
-    [WAXP/ETH](https://api.bittrex.com/v3/markets/WAXP-ETH/ticker)
-    [WAXP/USD](https://api.bittrex.com/v3/markets/WAXP-USD/ticker)
+    [USDC/USD](https://api.bitfinex.com/v1/pubticker/UDCUSD)
+    [USDT/USD](https://api.bitfinex.com/v1/pubticker/USTUSD)
 
 - Huobi:
 
@@ -42,7 +37,6 @@ ENDPOINT="<ENDPOINT>"
 ACCOUNT="<ACCOUNT>"
 PRIVATE_KEY="<PRIVATE KEY>"
 PERMISSION="<PERMISSION>"
-EXCHANGE="<EXCHANGE>"
 ```
 
 ## Install
